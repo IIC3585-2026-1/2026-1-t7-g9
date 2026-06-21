@@ -1,7 +1,9 @@
----
+﻿---
 import MainLayout from "../layouts/MainLayout.astro";
 import Header from "../components/astro/Header.astro";
 import Footer from "../components/astro/Footer.astro";
+import CryptoFilters from "../components/vue/CryptoFilters.vue";
+import LivePrices from "../components/svelte/LivePrices.svelte";
 import { getCryptos } from "../lib/api";
 
 const cryptos = await getCryptos();
@@ -11,19 +13,23 @@ const cryptos = await getCryptos();
   <Header />
 
   <main class="max-w-6xl mx-auto p-6 space-y-10">
-
-    <section>
-      <h2 class="text-2xl font-bold mb-2">Resumen del mercado</h2>
-      <p class="text-slate-400">
-        Datos cargados por Astro en el servidor (fetch inicial).
+    <section class="space-y-3">
+      <p class="text-sm font-semibold uppercase tracking-wide text-cyan-300">
+        Arquitectura de islas
+      </p>
+      <h2 class="text-3xl font-bold">Dashboard de monitoreo de criptomonedas</h2>
+      <p class="max-w-3xl text-slate-400">
+        Astro genera esta pagina estatica y realiza el fetch inicial del mercado.
+        Vue controla la configuracion del usuario y Svelte actualiza los precios
+        cuando la seccion en vivo entra en pantalla.
       </p>
     </section>
 
     <section class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
       {cryptos.map((coin) => (
-        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+        <div class="bg-slate-900 p-4 rounded-lg border border-slate-800">
           <div class="flex items-center gap-3">
-            <img src={coin.image} class="w-10 h-10" />
+            <img src={coin.image} alt={coin.name} class="w-10 h-10" />
             <div>
               <h3 class="font-semibold">{coin.name}</h3>
               <p class="text-sm text-slate-400 uppercase">{coin.symbol}</p>
@@ -31,22 +37,33 @@ const cryptos = await getCryptos();
           </div>
 
           <p class="mt-3 text-sm text-slate-300">
-            Precio: ${coin.current_price}
+            Precio inicial: ${coin.current_price || "cargando en vivo"}
           </p>
         </div>
       ))}
     </section>
 
-    <section id="config" class="bg-slate-900 p-6 rounded-xl border border-slate-800">
-      <h2 class="text-xl font-bold mb-2">Isla Vue (próximo paso)</h2>
-      <p class="text-slate-400">Aquí irá el selector de criptos.</p>
+    <section id="config" class="bg-slate-900 p-6 rounded-lg border border-slate-800">
+      <div class="mb-5">
+        <h2 class="text-xl font-bold">Isla Vue: filtros y configuracion</h2>
+        <p class="text-sm text-slate-400">
+          Cargada con <code class="text-cyan-300">client:load</code> para que el
+          formulario responda de inmediato.
+        </p>
+      </div>
+      <CryptoFilters client:load cryptos={cryptos} />
     </section>
 
-    <section id="live" class="bg-slate-900 p-6 rounded-xl border border-slate-800">
-      <h2 class="text-xl font-bold mb-2">Isla Svelte (próximo paso)</h2>
-      <p class="text-slate-400">Aquí irá el precio en tiempo real.</p>
+    <section id="live" class="bg-slate-900 p-6 rounded-lg border border-slate-800">
+      <div class="mb-5">
+        <h2 class="text-xl font-bold">Isla Svelte: precios en tiempo real</h2>
+        <p class="text-sm text-slate-400">
+          Cargada con <code class="text-cyan-300">client:visible</code> y
+          sincronizada mediante custom events.
+        </p>
+      </div>
+      <LivePrices client:visible initialCryptos={cryptos} />
     </section>
-
   </main>
 
   <Footer />
