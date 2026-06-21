@@ -6,7 +6,7 @@
   let selectedCryptos = initialCryptos.slice(0, 3);
   let prices = {};
   let loading = true;
-  let error = "";
+  let hasFetchError = false;
   let lastUpdated = "";
   let intervalId;
 
@@ -37,7 +37,7 @@
     if (selectedIds.length === 0) {
       prices = {};
       loading = false;
-      error = "";
+      hasFetchError = false;
       return;
     }
 
@@ -58,17 +58,14 @@
       }
 
       prices = await response.json();
-      error = "";
+      hasFetchError = false;
       lastUpdated = new Intl.DateTimeFormat("es-CL", {
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",
       }).format(new Date());
-    } catch (fetchError) {
-      error =
-        fetchError instanceof Error
-          ? fetchError.message
-          : "No se pudieron cargar los precios";
+    } catch {
+      hasFetchError = true;
     } finally {
       loading = false;
     }
@@ -114,17 +111,15 @@
     <div class="text-sm text-slate-400">
       {#if loading}
         Actualizando...
+      {:else if hasFetchError && lastUpdated}
+        Reintentando...
+      {:else if hasFetchError}
+        Esperando conexion...
       {:else}
         En vivo
       {/if}
     </div>
   </div>
-
-  {#if error}
-    <p class="rounded-lg border border-rose-900 bg-rose-950/50 p-3 text-sm text-rose-200">
-      {error}
-    </p>
-  {/if}
 
   {#if selectedCryptos.length === 0}
     <p class="rounded-lg border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-400">
