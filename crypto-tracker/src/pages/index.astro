@@ -1,0 +1,53 @@
+---
+import MainLayout from "../layouts/MainLayout.astro";
+import Header from "../components/astro/Header.astro";
+import Footer from "../components/astro/Footer.astro";
+import { getCryptos } from "../lib/api";
+
+const cryptos = await getCryptos();
+---
+
+<MainLayout title="Crypto Tracker">
+  <Header />
+
+  <main class="max-w-6xl mx-auto p-6 space-y-10">
+
+    <section>
+      <h2 class="text-2xl font-bold mb-2">Resumen del mercado</h2>
+      <p class="text-slate-400">
+        Datos cargados por Astro en el servidor (fetch inicial).
+      </p>
+    </section>
+
+    <section class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {cryptos.map((coin) => (
+        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+          <div class="flex items-center gap-3">
+            <img src={coin.image} class="w-10 h-10" />
+            <div>
+              <h3 class="font-semibold">{coin.name}</h3>
+              <p class="text-sm text-slate-400 uppercase">{coin.symbol}</p>
+            </div>
+          </div>
+
+          <p class="mt-3 text-sm text-slate-300">
+            Precio: ${coin.current_price}
+          </p>
+        </div>
+      ))}
+    </section>
+
+    <section id="config" class="bg-slate-900 p-6 rounded-xl border border-slate-800">
+      <h2 class="text-xl font-bold mb-2">Isla Vue (próximo paso)</h2>
+      <p class="text-slate-400">Aquí irá el selector de criptos.</p>
+    </section>
+
+    <section id="live" class="bg-slate-900 p-6 rounded-xl border border-slate-800">
+      <h2 class="text-xl font-bold mb-2">Isla Svelte (próximo paso)</h2>
+      <p class="text-slate-400">Aquí irá el precio en tiempo real.</p>
+    </section>
+
+  </main>
+
+  <Footer />
+</MainLayout>
