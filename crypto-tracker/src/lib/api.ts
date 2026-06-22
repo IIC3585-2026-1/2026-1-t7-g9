@@ -1,11 +1,6 @@
-﻿export type CryptoMarket = {
-  id: string;
-  symbol: string;
-  name: string;
-  image: string;
-  current_price: number;
-  market_cap_rank: number;
-};
+﻿import type { CryptoMarket } from "./types";
+
+export type { CryptoMarket } from "./types";
 
 const fallbackCryptos: CryptoMarket[] = [
   {

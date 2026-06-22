@@ -1,19 +1,28 @@
-﻿<script>
+﻿<script lang="ts">
   import { onMount } from "svelte";
+  import {
+    CRYPTO_SELECTION_STORAGE_KEY,
+    type CryptoChangedDetail,
+    type CryptoMarket,
+    type CryptoOption,
+    type CryptoPrices,
+  } from "../../lib/types";
 
-  export let initialCryptos = [];
+  export let initialCryptos: CryptoMarket[] = [];
 
-  let selectedCryptos = initialCryptos.slice(0, 3);
-  let prices = {};
+  let selectedCryptos: CryptoOption[] = initialCryptos.slice(0, 3);
+  let prices: CryptoPrices = {};
   let loading = true;
   let hasFetchError = false;
   let lastUpdated = "";
-  let intervalId;
+  let timeoutId: number | undefined;
+  let abortController: AbortController | undefined;
+  let pollingGeneration = 0;
 
   $: selectedIds = selectedCryptos.map((coin) => coin.id);
   $: chartMax = Math.max(...selectedIds.map((id) => prices[id]?.usd ?? 0), 1);
 
-  function formatPrice(value) {
+  function formatPrice(value: number | undefined) {
     if (typeof value !== "number") {
       return "Sin dato";
     }
@@ -25,7 +34,7 @@
     }).format(value);
   }
 
-  function formatChange(value) {
+  function formatChange(value: number | undefined) {
     if (typeof value !== "number") {
       return "0.00%";
     }
@@ -33,31 +42,33 @@
     return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
   }
 
-  async function fetchPrices() {
-    if (selectedIds.length === 0) {
-      prices = {};
-      loading = false;
-      hasFetchError = false;
-      return;
-    }
-
+  async function fetchPrices(ids: string[], generation: number) {
     loading = true;
+    const controller = new AbortController();
+    abortController = controller;
 
     try {
       const params = new URLSearchParams({
-        ids: selectedIds.join(","),
+        ids: ids.join(","),
         vs_currencies: "usd",
         include_24hr_change: "true",
       });
       const response = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?${params.toString()}`
+        `https://api.coingecko.com/api/v3/simple/price?${params.toString()}`,
+        { signal: controller.signal }
       );
 
       if (!response.ok) {
         throw new Error("No se pudieron cargar los precios");
       }
 
-      prices = await response.json();
+      const nextPrices = (await response.json()) as CryptoPrices;
+
+      if (generation !== pollingGeneration) {
+        return;
+      }
+
+      prices = nextPrices;
       hasFetchError = false;
       lastUpdated = new Intl.DateTimeFormat("es-CL", {
         hour: "2-digit",
@@ -65,36 +76,135 @@
         second: "2-digit",
       }).format(new Date());
     } catch {
-      hasFetchError = true;
+      if (generation === pollingGeneration) {
+        hasFetchError = true;
+      }
     } finally {
-      loading = false;
+      if (abortController === controller) {
+        abortController = undefined;
+      }
+
+      if (generation === pollingGeneration) {
+        loading = false;
+      }
+    }
+  }
+
+  function stopPolling() {
+    pollingGeneration += 1;
+
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+      timeoutId = undefined;
+    }
+
+    abortController?.abort();
+    abortController = undefined;
+  }
+
+  async function pollPrices(ids: string[], generation: number) {
+    await fetchPrices(ids, generation);
+
+    if (generation === pollingGeneration) {
+      timeoutId = window.setTimeout(
+        () => void pollPrices(ids, generation),
+        5000
+      );
     }
   }
 
   function restartPolling() {
-    if (intervalId) {
-      window.clearInterval(intervalId);
+    stopPolling();
+
+    const generation = pollingGeneration;
+    const ids = selectedCryptos.map((coin) => coin.id);
+
+    if (ids.length === 0) {
+      prices = {};
+      loading = false;
+      hasFetchError = false;
+      return;
     }
 
-    fetchPrices();
-    intervalId = window.setInterval(fetchPrices, 5000);
+    void pollPrices(ids, generation);
   }
 
-  function handleCryptoChanged(event) {
-    selectedCryptos = event.detail.selectedCryptos;
+  function applySelection(detail: CryptoChangedDetail) {
+    selectedCryptos = detail.selectedCryptos;
+    restartPolling();
+  }
+
+  function handleCryptoChanged(event: CustomEvent<CryptoChangedDetail>) {
+    applySelection(event.detail);
+  }
+
+  function isCryptoChangedDetail(value: unknown): value is CryptoChangedDetail {
+    if (!value || typeof value !== "object") {
+      return false;
+    }
+
+    const detail = value as Partial<CryptoChangedDetail>;
+
+    return (
+      Array.isArray(detail.selectedIds) &&
+      detail.selectedIds.every((id) => typeof id === "string") &&
+      Array.isArray(detail.selectedCryptos) &&
+      detail.selectedCryptos.every(
+        (coin) =>
+          coin !== null &&
+          typeof coin === "object" &&
+          typeof coin.id === "string" &&
+          typeof coin.symbol === "string" &&
+          typeof coin.name === "string" &&
+          typeof coin.image === "string"
+      )
+    );
+  }
+
+  function restoreStoredSelection() {
+    let storedSelection: string | null = null;
+
+    try {
+      storedSelection = sessionStorage.getItem(
+        CRYPTO_SELECTION_STORAGE_KEY
+      );
+    } catch {
+      restartPolling();
+      return;
+    }
+
+    if (!storedSelection) {
+      restartPolling();
+      return;
+    }
+
+    try {
+      const detail: unknown = JSON.parse(storedSelection);
+
+      if (isCryptoChangedDetail(detail)) {
+        applySelection(detail);
+        return;
+      }
+    } catch {
+      // Invalid JSON is handled below by discarding the stored value.
+    }
+
+    try {
+      sessionStorage.removeItem(CRYPTO_SELECTION_STORAGE_KEY);
+    } catch {
+      // Storage may be disabled; initial data still keeps the island usable.
+    }
+
     restartPolling();
   }
 
   onMount(() => {
     window.addEventListener("crypto-changed", handleCryptoChanged);
-    restartPolling();
+    restoreStoredSelection();
 
     return () => {
       window.removeEventListener("crypto-changed", handleCryptoChanged);
-
-      if (intervalId) {
-        window.clearInterval(intervalId);
-      }
+      stopPolling();
     };
   });
 </script>

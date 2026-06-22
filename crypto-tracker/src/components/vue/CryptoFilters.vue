@@ -1,12 +1,10 @@
 ﻿<script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-
-type CryptoOption = {
-  id: string;
-  symbol: string;
-  name: string;
-  image: string;
-};
+import {
+  CRYPTO_SELECTION_STORAGE_KEY,
+  type CryptoChangedDetail,
+  type CryptoOption,
+} from "../../lib/types";
 
 const props = defineProps<{
   cryptos: CryptoOption[];
@@ -34,14 +32,22 @@ function emitSelection() {
   const selectedCryptos = props.cryptos.filter((coin) =>
     selectedIds.value.includes(coin.id)
   );
+  const detail: CryptoChangedDetail = {
+    selectedIds: [...selectedIds.value],
+    selectedCryptos,
+  };
+
+  try {
+    sessionStorage.setItem(
+      CRYPTO_SELECTION_STORAGE_KEY,
+      JSON.stringify(detail)
+    );
+  } catch {
+    // The custom event remains the primary channel if storage is unavailable.
+  }
 
   window.dispatchEvent(
-    new CustomEvent("crypto-changed", {
-      detail: {
-        selectedIds: selectedIds.value,
-        selectedCryptos,
-      },
-    })
+    new CustomEvent<CryptoChangedDetail>("crypto-changed", { detail })
   );
 }
 
